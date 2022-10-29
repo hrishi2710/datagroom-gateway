@@ -1,57 +1,59 @@
 // Can't use strict because of certain mongodb API will be too rigid otherwise. 
 // "use strict";
 
-const MongoClient = require('mongodb').MongoClient;
+// const MongoClient = require('mongodb').MongoClient;
+var { MongoClient } = require('mongodb')
 var ObjectId = require('mongodb').ObjectId;
 
 class DbAbstraction {
-    constructor () {
-        this.url = 'mongodb://localhost:27017';
+    constructor() {
+        // this.url = 'mongodb://localhost:27017';
+        this.url = 'mongodb+srv://hrishi:manorama11@cluster0.onvfm2f.mongodb.net/?retryWrites=true&w=majority';
         this.client = null;
     }
-    async destroy () {
+    async destroy() {
         if (this.client) {
             await this.client.close(true);
             this.client = null;
         }
     }
-    async connect () {
+    async connect() {
         this.client = await MongoClient.connect(this.url, { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 5000 })
             .catch(err => { console.log(err); this.client = null; });
     }
-    async createDb (dbName) {
-        if (! this.client ) await this.connect();
+    async createDb(dbName) {
+        if (!this.client) await this.connect();
         this.client.db(dbName);
     }
-    async deleteDb (dbName) {
-        if (! this.client ) await this.connect();
+    async deleteDb(dbName) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         return await db.dropDatabase();
     }
-    async deleteTable (dbName, tableName) {
-        if (! this.client ) await this.connect();
+    async deleteTable(dbName, tableName) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         let ret = await collection.drop();
         return ret.result;
 
     }
-    async createTable (dbName, tableName) {
-        if (! this.client ) await this.connect();
+    async createTable(dbName, tableName) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         db.collection(tableName);
     }
     // Only double-quotes need to be escaped while inserting data rows. 
     // And don't allow column names which start with underscore. Or at least don't allow _id
-    async insertOne (dbName, tableName, doc) {
-        if (! this.client ) await this.connect();
+    async insertOne(dbName, tableName, doc) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         let ret = await collection.insertOne(doc);
         return ret.result;
     }
-    async insertOneUniquely (dbName, tableName, selector, setObj) {
-        if (! this.client ) await this.connect();
+    async insertOneUniquely(dbName, tableName, selector, setObj) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         if (selector["_id"]) {
@@ -61,14 +63,14 @@ class DbAbstraction {
         let ret = await collection.updateOne(selector, { $setOnInsert: setObj }, { upsert: true });
         return ret.result;
     }
-    async update (dbName, tableName, selector, updateObj) {
-        if (! this.client ) await this.connect();
+    async update(dbName, tableName, selector, updateObj) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         return await collection.updateMany(selector, { $set: updateObj }, { upsert: true });
     }
-    async updateOne (dbName, tableName, selector, updateObj, convertId = true) {
-        if (! this.client ) await this.connect();
+    async updateOne(dbName, tableName, selector, updateObj, convertId = true) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         if (selector["_id"] && convertId) {
@@ -78,8 +80,8 @@ class DbAbstraction {
         return ret.result;
     }
 
-    async unsetOne (dbName, tableName, selector, unsetObj, convertId = true) {
-        if (! this.client ) await this.connect();
+    async unsetOne(dbName, tableName, selector, unsetObj, convertId = true) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         if (selector["_id"] && convertId) {
@@ -89,31 +91,31 @@ class DbAbstraction {
         return ret.result;
     }
 
-    async updateOneKeyInTransaction (dbName, tableName, selector, updateObj) {
-        if (! this.client ) await this.connect();
+    async updateOneKeyInTransaction(dbName, tableName, selector, updateObj) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         const session = this.client.startSession();
-        let ret = {}; 
+        let ret = {};
         try {
             await session.withTransaction(async () => {
                 let collection = db.collection(tableName);
                 let query = JSON.parse(JSON.stringify(selector));
                 delete query["_id"];
                 // See if the new object already exists
-                query = {...query, ...updateObj};
+                query = { ...query, ...updateObj };
                 console.log("Query obj: ", query);
-                let data = await this.find (dbName, tableName, query, {} );
+                let data = await this.find(dbName, tableName, query, {});
                 console.log("Find result: ", data);
                 if (data.length) {
                     ret.result = { nModified: 0, error: "Key conflict" }
                 } else {
                     if (selector["_id"]) {
                         selector["_id"] = new ObjectId(selector["_id"]);
-                    } 
+                    }
                     ret = await collection.updateOne(selector, { $set: updateObj }, {});
                 }
             }, {})
-    
+
         } finally {
             await session.endSession();
         }
@@ -121,8 +123,8 @@ class DbAbstraction {
         return ret.result;
     }
 
-    async removeOne (dbName, tableName, selector) {
-        if (! this.client ) await this.connect();
+    async removeOne(dbName, tableName, selector) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         if (selector["_id"]) {
@@ -132,16 +134,16 @@ class DbAbstraction {
         return ret.result;
     }
 
-    async removeOneWithValidId (dbName, tableName, selector) {
-        if (! this.client ) await this.connect();
+    async removeOneWithValidId(dbName, tableName, selector) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         let ret = await collection.deleteOne(selector);
         return ret.result;
     }
 
-    async removeMany (dbName, tableName, selector, convertId = true) {
-        if (! this.client ) await this.connect();
+    async removeMany(dbName, tableName, selector, convertId = true) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         if (selector["_id"] && convertId) {
@@ -151,44 +153,44 @@ class DbAbstraction {
         return ret.result;
     }
 
-    async removeFieldFromAll (dbName, tableName, field) {
-        if (! this.client ) await this.connect();
+    async removeFieldFromAll(dbName, tableName, field) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         let unsetObj = {};
         unsetObj[field] = 1;
-        let ret = await collection.updateMany({}, {$unset: unsetObj}, {});
+        let ret = await collection.updateMany({}, { $unset: unsetObj }, {});
         return ret.result;
     }
 
-    async countDocuments (dbName, tableName, query, options) {
-        if (! this.client ) await this.connect();
+    async countDocuments(dbName, tableName, query, options) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
 
-        return new Promise ((resolve, reject) => {
+        return new Promise((resolve, reject) => {
             collection.countDocuments(query, options, (err, data) => {
-                err ? reject (err) : resolve (data)
-            });            
+                err ? reject(err) : resolve(data)
+            });
         })
     }
-    getObjectId (id) {
+    getObjectId(id) {
         return new ObjectId(id);
     }
-    async find (dbName, tableName, query, options) {
-        if (! this.client ) await this.connect();
+    async find(dbName, tableName, query, options) {
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
 
-        return new Promise ((resolve, reject) => {
+        return new Promise((resolve, reject) => {
             collection.find(query, options).toArray((err, data) => {
-                err ? reject (err) : resolve (data);
+                err ? reject(err) : resolve(data);
             })
         })
     }
 
     async removeFromQuery(dbName, tableName, query, options) {
-        if (! this.client ) await this.connect();
+        if (!this.client) await this.connect();
         let db = this.client.db(dbName);
         let collection = db.collection(tableName);
         let count = 0;
@@ -202,13 +204,13 @@ class DbAbstraction {
         return count;
     }
 
-    async pagedFind (dbName, tableName, query, options, page, limit) {
+    async pagedFind(dbName, tableName, query, options, page, limit) {
         let skip = limit * (page - 1);
         let findOptions = { ...options, limit, skip };
         //console.log(dbName, tableName, query, findOptions);
-        let data = await this.find (dbName, tableName, query, findOptions );
+        let data = await this.find(dbName, tableName, query, findOptions);
         //console.log(data);
-        let total = await this.countDocuments (dbName, tableName, query, options);
+        let total = await this.countDocuments(dbName, tableName, query, options);
         let totalPages = Math.ceil(total / limit);
         //console.log(total, totalPages);
         let results = { page, per_page: limit, total, total_pages: totalPages, data }
@@ -216,14 +218,14 @@ class DbAbstraction {
         return results;
     }
 
-    async listDatabases () {
-        if (! this.client ) await this.connect();
+    async listDatabases() {
+        if (!this.client) await this.connect();
         let dbs = await this.client.db().admin().listDatabases();
         return dbs.databases;
     }
 
-    async copy (fromDsName, fromTable, toDsName, toTable, fn) {
-        if (! this.client ) await this.connect();
+    async copy(fromDsName, fromTable, toDsName, toTable, fn) {
+        if (!this.client) await this.connect();
         let fromDb = this.client.db(fromDsName);
         let toDb = this.client.db(toDsName);
         let fromCollection = fromDb.collection(fromTable);
@@ -242,10 +244,10 @@ class DbAbstraction {
         }
     }
 
-    async hello () {
+    async hello() {
         console.log("Hello from DbAbstraction!");
-        if (! this.client ) await this.connect();
-        let dbs = await this.client.db().admin().listDatabases();        
+        if (!this.client) await this.connect();
+        let dbs = await this.client.db().admin().listDatabases();
         console.log("dbs: ", dbs.databases);
         return;
     }

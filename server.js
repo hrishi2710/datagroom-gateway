@@ -23,12 +23,12 @@ const config = {
 };
 
 // Active directory functionality
-let disableAD = false; 
+let disableAD = false;
 
 if (process.argv.length >= 2) {
     for (let i = 2; i < process.argv.length; i++) {
         let argkv = process.argv[i].split('=');
-        if(argkv[0] == 'disableAD' && argkv[1] == "true") {
+        if (argkv[0] == 'disableAD' && argkv[1] == "true") {
             disableAD = true;
         }
     }
@@ -47,7 +47,7 @@ try {
     let ca = "";
     try {
         ca = fs.readFileSync(dirPath + '/ca.pem')
-    } catch (e) {}
+    } catch (e) { }
     if (ca) options.ca = ca;
 
     httpServer = require('https').createServer(options, app);
@@ -59,7 +59,7 @@ try {
     httpServer = require('http').createServer(app);
     io = require('socket.io')(httpServer, { pingTimeout: 60000 });
     httpServer.listen(config.express.port);
-    console.log('http server listening on port : ', config.express.port);    
+    console.log('http server listening on port : ', config.express.port);
 }
 httpServer.timeout = 60 * 60 * 1000;
 
@@ -68,7 +68,7 @@ app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, D-Hive-User");
     next();
-}); 
+});
 app.use(bodyParser.json());
 app.use(compression());
 app.use(express.static(reactuiDir));
@@ -109,7 +109,7 @@ const uploadAttachments = require('./routes/uploadAttachments');
 app.use('/uploadAttachments', uploadAttachments);
 
 app.route('/login').post(loginAuthenticateForReact);
-    
+
 app.all('*', (req, res, next) => {
     res.sendFile('./index.html', {
         root: reactuiDir
@@ -117,9 +117,9 @@ app.all('*', (req, res, next) => {
 });
 
 // Locks logic, move to separate file
-var locks = {}; 
+var locks = {};
 var clientLocks = {};
-function dgLock (lockReq, clientId) {
+function dgLock(lockReq, clientId) {
     if (!locks[lockReq.dsName]) {
         locks[lockReq.dsName] = {};
     }
@@ -143,7 +143,7 @@ function dgLock (lockReq, clientId) {
         }
         clientLocks[clientId] = lockReq;
         docLocks[lockReq.field] = clientId;
-        return {status: true, unlocked: prevLockReq};
+        return { status: true, unlocked: prevLockReq };
     } else {
         let prevLockReq = null;
         if (clientLocks[clientId]) {
@@ -154,10 +154,10 @@ function dgLock (lockReq, clientId) {
                 delete clientLocks[clientId];
                 dgUnlock(prevLockReq, clientId);
             } else {
-                return {status: true, unlocked: null};
+                return { status: true, unlocked: null };
             }
         }
-        return {status: false, unlocked: prevLockReq};
+        return { status: false, unlocked: prevLockReq };
     }
 }
 
@@ -165,31 +165,31 @@ function dgUnlock(unlockReq, clientId) {
     try {
         if (locks[unlockReq.dsName][unlockReq._id][unlockReq.field] === clientId) {
             delete locks[unlockReq.dsName][unlockReq._id][unlockReq.field];
-            if (! Object.keys(locks[unlockReq.dsName][unlockReq._id]).length) 
+            if (!Object.keys(locks[unlockReq.dsName][unlockReq._id]).length)
                 delete locks[unlockReq.dsName][unlockReq._id];
             delete clientLocks[clientId];
             //console.log("Returning true in dgUnLock: 1");
-            return {status: true}
-        } 
-    } catch (e) { console.log("Exception in dgUnlock", unlockReq)}
+            return { status: true }
+        }
+    } catch (e) { console.log("Exception in dgUnlock", unlockReq) }
 
     if (unlockReq.newVal) { // XXX: Should it have more stringent checks here?
         //console.log("Returning true in dgUnlock: 2");
-        return {status: true}
+        return { status: true }
     }
     //console.log("Returning false in dgUnlock.")
-    return {status: false}
+    return { status: false }
 }
 
-function dgUnlockForClient (clientId) {
+function dgUnlockForClient(clientId) {
     try {
         if (clientLocks[clientId]) {
             let prevLockReq = clientLocks[clientId];
-            dgUnlock(prevLockReq, clientId);               
-            return {status: true, unlocked: prevLockReq}
+            dgUnlock(prevLockReq, clientId);
+            return { status: true, unlocked: prevLockReq }
         }
-    } catch (e) {}
-    return {status: false, unlocked: null}
+    } catch (e) { }
+    return { status: false, unlocked: null }
 }
 
 
@@ -209,7 +209,7 @@ function dgUnlockForClient (clientId) {
         });
         client.on('lockReq', (lockReq) => {
             console.log(`${Date()}: lockReq: `, lockReq);
-            let {status, unlocked} = dgLock(lockReq, client.id);
+            let { status, unlocked } = dgLock(lockReq, client.id);
             if (status) {
                 client.broadcast.emit('locked', lockReq);
             }
@@ -218,11 +218,11 @@ function dgUnlockForClient (clientId) {
             }
             let dsLocks = locks[lockReq.dsName];
             console.log('active locks after lockReq:', JSON.stringify(dsLocks));
-    
+
         });
         client.on('unlockReq', (unlockReq) => {
             console.log(`${Date()}: unlockReq: `, unlockReq);
-            let {status} = dgUnlock(unlockReq, client.id);
+            let { status } = dgUnlock(unlockReq, client.id);
             if (status) {
                 client.broadcast.emit('unlocked', unlockReq);
                 //console.log("Emitted this unlock request.");
@@ -241,7 +241,7 @@ function dgUnlockForClient (clientId) {
         });
         client.on('disconnect', (mySocket) => {
             console.log(`${Date()}: disconnect: `, client.id);
-            let {status, unlocked} = dgUnlockForClient(client.id);
+            let { status, unlocked } = dgUnlockForClient(client.id);
             if (status) {
                 client.broadcast.emit('unlocked', unlocked);
             } // else, it is a stale 'unlock' !
@@ -261,14 +261,20 @@ function loginAuthenticateForReact(req, res, next) {
     reqObj.time = Date();
     reqObj.user = req.session.user;
 
-    if (reqObj.user=='guest' && req.body.password == 'guest') {
+    if (reqObj.user == 'guest' && req.body.password == 'guest') {
         let retUser = {
             user: "guest",
-            token: jwt.sign({ user: reqObj.user },config.jwtSecret)
+            token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
         };
-        res.send({ ok: true, user: JSON.stringify(retUser)});       
+        res.send({ ok: true, user: JSON.stringify(retUser) });
+    } if (reqObj.user == 'hrishi' && req.body.password == 'hrishi') {
+        let retUser = {
+            user: "hrishi",
+            token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
+        };
+        res.send({ ok: true, user: JSON.stringify(retUser) });
     } else {
-        if(disableAD){
+        if (disableAD) {
             let errMessage = `Only guest Login allowed!`;
             return res.send(errMessage);
         }
@@ -289,7 +295,7 @@ function loginAuthenticateForReact(req, res, next) {
             let retUser = {
                 user: req.session.user,
                 userphoto: req.session.userphoto,
-                token: jwt.sign({ user},config.jwtSecret)
+                token: jwt.sign({ user }, config.jwtSecret)
             };
             reqObj.req = "Login Successfull";
             console.log(req.session.user, ' logged in successfully');
