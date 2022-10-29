@@ -14,7 +14,7 @@ const Utils = require('./utils');
 const PrepAttachments = require('./prepAttachments');
 let fs = require('fs');
 
-const reactuiDir = path.resolve(__dirname, '../datagroom-ui/build');
+const reactuiDir = path.resolve(__dirname, './build');
 const config = {
     express: {
         port: process.env.PORT || 8887,
