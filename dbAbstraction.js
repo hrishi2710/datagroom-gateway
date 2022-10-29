@@ -4,11 +4,12 @@
 // const MongoClient = require('mongodb').MongoClient;
 var { MongoClient } = require('mongodb')
 var ObjectId = require('mongodb').ObjectId;
-
+const dotenv = require('dotenv')
 class DbAbstraction {
     constructor() {
         // this.url = 'mongodb://localhost:27017';
-        this.url = 'mongodb+srv://hrishi:manorama11@cluster0.onvfm2f.mongodb.net/?retryWrites=true&w=majority';
+        dotenv.config({ path: './config.env' })
+        this.url = process.env.DATABASE;
         this.client = null;
     }
     async destroy() {

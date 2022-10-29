@@ -4,3 +4,4 @@ uploads
 nohup.out
 ldapSettings.js
 attachments
+config.env
