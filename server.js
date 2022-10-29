@@ -278,13 +278,13 @@ function loginAuthenticateForReact(req, res, next) {
         res.send({ ok: true, user: JSON.stringify(retUser) });
     } if (reqObj.user == 'abhilash' && req.body.password == process.env.ABHIPWD) {
         let retUser = {
-            user: "hrishi",
+            user: "abhilash",
             token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
         };
         res.send({ ok: true, user: JSON.stringify(retUser) });
     } if (reqObj.user == 'ayush' && req.body.password == process.env.AYUSHPWD) {
         let retUser = {
-            user: "hrishi",
+            user: "ayush",
             token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
         };
         res.send({ ok: true, user: JSON.stringify(retUser) });
