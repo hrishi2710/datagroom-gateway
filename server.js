@@ -13,6 +13,9 @@ const ExcelUtils = require('./excelUtils');
 const Utils = require('./utils');
 const PrepAttachments = require('./prepAttachments');
 let fs = require('fs');
+const dotenv = require('dotenv')
+
+dotenv.config({ path: './config.env' })
 
 const reactuiDir = path.resolve(__dirname, './build');
 const config = {
@@ -267,7 +270,19 @@ function loginAuthenticateForReact(req, res, next) {
             token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
         };
         res.send({ ok: true, user: JSON.stringify(retUser) });
-    } if (reqObj.user == 'hrishi' && req.body.password == 'hrishi') {
+    } if (reqObj.user == 'hrishi' && req.body.password == process.env.HRISHIPWD) {
+        let retUser = {
+            user: "hrishi",
+            token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
+        };
+        res.send({ ok: true, user: JSON.stringify(retUser) });
+    } if (reqObj.user == 'abhilash' && req.body.password == process.env.ABHIPWD) {
+        let retUser = {
+            user: "hrishi",
+            token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
+        };
+        res.send({ ok: true, user: JSON.stringify(retUser) });
+    } if (reqObj.user == 'ayush' && req.body.password == process.env.AYUSHPWD) {
         let retUser = {
             user: "hrishi",
             token: jwt.sign({ user: reqObj.user }, config.jwtSecret)
