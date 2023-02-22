@@ -575,6 +575,66 @@ async function getJiraAgileJql(jiraConfig) {
     return jql
 }
 
+async function getWorkflowTransitionFieldsForJira(jiraId) {
+    let fields = {}
+    try {
+        const auth = 'Basic ' + Buffer.from(JiraSettings.settings.username + ':' + JiraSettings.settings.password).toString('base64');
+        const options = {
+            headers: {
+                'Authorization': auth
+            }
+        };
+        let jiraUrl = "https://" + host + `/rest/api/2/issue/${jiraId}/transitions?expand=transitions.fields`;
+        const response = await fetch(jiraUrl, options)
+        if (response.ok) {
+            let responseJson = await response.json();
+            let transitions = responseJson.transitions;
+            fields = getTransitionsFieldsObj(transitions);
+        }
+    } catch (e) {
+        console.log(`Error while getting workflow fields for jiraId: ${jiraId}`, e)
+    }
+    return fields
+}
+
+/**
+ * 
+ * @param {Array} transitions 
+ * @returns 
+ */
+function getTransitionsFieldsObj(transitions) {
+    let fieldsObj = {}
+    try {
+        let transitionNames = transitions.map((currTransition) => currTransition.name);
+        fieldsObj.transitionNames = transitionNames;
+        for (let i = 0; i < transitions.length; i++) {
+            let currTransition = transitions[i]
+            let currTransitionName = currTransition.name
+            fieldsObj[currTransitionName] = {}
+            fieldsObj[currTransitionName].id = currTransition.id;
+            fieldsObj[currTransitionName].fields = {}
+            for (let currField of Object.keys(currTransition.fields)) {
+                fieldsObj[currTransitionName].fields[currField] = {}
+                fieldsObj[currTransitionName].fields[currField].type = currTransition.fields[currField].schema.type;
+                fieldsObj[currTransitionName].fields[currField].name = currTransition.fields[currField].name;
+                if (currTransition.fields[currField].allowedValues) {
+                    fieldsObj[currTransitionName].fields[currField].allowedValues = [];
+                    for (let j = 0; j < currTransition.fields[currField].allowedValues.length; j++) {
+                        let currAllowedValue = currTransition.fields[currField].allowedValues[j];
+                        if (currAllowedValue.value)
+                            fieldsObj[currTransitionName].fields[currField].allowedValues.push(currAllowedValue.value)
+                        if (currAllowedValue.name)
+                            fieldsObj[currTransitionName].fields[currField].allowedValues.push(currAllowedValue.name)
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.log(`Error in getTransitionsFieldsObj: ${e}`)
+    }
+    return fieldsObj
+}
+
 module.exports = {
     refreshJiraQuery,
     getProjectsMetaData,
@@ -583,5 +643,6 @@ module.exports = {
     getJiraRecordFromKey,
     updateJiraRecInDb,
     getFullRecFromJiraRec,
-    createFilteredProjectsMetaData
+    createFilteredProjectsMetaData,
+    getWorkflowTransitionFieldsForJira
 };
