@@ -124,6 +124,16 @@ function getMongoFiltersAndSorters (qFilters, qSorters, qChronology) {
                 } else if (v.type === "lt") {
                     filters[v.field] = {$lt: new ObjectId(v.value)};
                 }
+            } else if (v.field === "cutOffDate") {
+                const cutOffDate = v.value;
+                const cutOffObjectId = ObjectId.createFromTime(Math.floor(cutOffDate.getTime() / 1000));
+                if (v.type === "gt") {
+                    // @ts-ignore
+                    filters["_id"] = {$gt: cutOffObjectId};
+                } else if (v.type === "lt") {
+                    // @ts-ignore
+                    filters["_id"] = {$lt: cutOffObjectId};
+                }
             } else if (v.type === 'like') {
                 let filter = getFilters(v.value, v.field);
                 if (filter["$or"]) {

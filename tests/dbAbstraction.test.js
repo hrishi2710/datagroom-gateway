@@ -151,6 +151,9 @@ describe('DbAbstraction', function() {
             const oldDate = new Date('2023-01-01');
             const recentDate = new Date('2024-06-01');
             const cutOffDate = '01-03-2024'; // March 1, 2024
+            const cutOffObjectId = dbAbstraction.getObjectId(Math.floor(new Date(cutOffDate).getTime() / 1000).toString(16) + '0000000000000000');
+
+            const filters = { _id: { $lt: cutOffObjectId } };
 
             // Create ObjectIds with specific timestamps for testing
             const oldObjectId1 = dbAbstraction.getObjectId(Math.floor(oldDate.getTime() / 1000).toString(16) + '0000000000000000');
@@ -173,7 +176,7 @@ describe('DbAbstraction', function() {
             expect(initialCount).toBe(3);
 
             // Perform archive operation
-            const archiveResult = await dbAbstraction.archiveData(sourceDbName, collectionName, archiveDbName, cutOffDate);
+            const archiveResult = await dbAbstraction.archiveData(sourceDbName, collectionName, archiveDbName, filters);
 
             // Verify archive was successful
             expect(archiveResult.error).toBeUndefined();
@@ -198,9 +201,11 @@ describe('DbAbstraction', function() {
             await dbAbstraction.insertOne(sourceDbName, collectionName, recentDoc);
 
             const cutOffDate = '01-01-2020'; // Very old date
-            const archiveResult = await dbAbstraction.archiveData(sourceDbName, collectionName, archiveDbName, cutOffDate);
+            const cutOffObjectId = dbAbstraction.getObjectId(Math.floor(new Date(cutOffDate).getTime() / 1000).toString(16) + '0000000000000000');
+            const filters = { _id: { $lt: cutOffObjectId } };
+            const archiveResult = await dbAbstraction.archiveData(sourceDbName, collectionName, archiveDbName, filters);
 
-            expect(archiveResult.status).toContain('No documents older than');
+            expect(archiveResult.status).toContain('No documents matching filters');
             
             // Verify no documents were archived
             const archivedDocs = await dbAbstraction.find(archiveDbName, collectionName, {}, {});

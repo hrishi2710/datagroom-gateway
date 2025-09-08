@@ -480,10 +480,10 @@ class DbAbstraction {
      * @param {string} sourceDbName
      * @param {String} collectionName
      * @param {string} archiveDbName
-     * @param {string} date
+     * @param {Object} filters
      * @returns {Promise<Object>}
      */
-    async archiveData(sourceDbName, collectionName, archiveDbName, date) {
+    async archiveData(sourceDbName, collectionName, archiveDbName, filters) {
         try {
             if (!sourceDbName || await this.ifDbExists(sourceDbName) == false) {
                 let error = new Error(`${sourceDbName} dataset doesn't exist`);
@@ -496,13 +496,9 @@ class DbAbstraction {
             if (!collectionName) {
                 collectionName = "data";
             }
-            let cutOffDate = parseAndValidateDate(date);
-            if (cutOffDate.error) {
-                return {error: cutOffDate.error}
-            }
             
             logger.info(`Archiving ${archiveDbName}.${collectionName}`);
-            let status = await this.archiveCollection(sourceDbName, collectionName, archiveDbName, cutOffDate.date);
+            let status = await this.archiveCollection(sourceDbName, collectionName, archiveDbName, filters);
             return {status}
         } catch (e) {
             logger.error(e, "MongoDbArchive: Error in archiving");
@@ -530,10 +526,10 @@ class DbAbstraction {
      * @param {String} sourceDbName
      * @param {String} collectionName
      * @param {String} archiveDbName
-     * @param {Date} cutOffDate
+     * @param {Object} filters
      * @returns {Promise<Object>}
      */
-    async archiveCollection(sourceDbName, collectionName, archiveDbName, cutOffDate) {
+    async archiveCollection(sourceDbName, collectionName, archiveDbName, filters) {
         let status = "";
         if (!this.isConnected) await this.connect();
         const sourceDb = this.client.db(sourceDbName);
@@ -542,15 +538,12 @@ class DbAbstraction {
         const sourceCollection = sourceDb.collection(collectionName);
         const archiveCollection = archiveDb.collection(collectionName);
 
-        const cutOffObjectId = ObjectId.createFromTime(Math.floor(cutOffDate.getTime() / 1000));
-        const query = { "_id": { $lt: cutOffObjectId } }
-
-        const cursor = await sourceCollection.find(query).sort({ _id: 1 });
+        const cursor = await sourceCollection.find(filters).sort({ _id: 1 });
         const documentsToArchive = await cursor.toArray();
 
         if (documentsToArchive.length === 0) {
-            logger.info(`No documents older than ${cutOffDate} in ${sourceDbName}.${collectionName} to archive.`);
-            status = `No documents older than ${cutOffDate} in ${sourceDbName}.${collectionName} to archive.`;
+            logger.info(`No documents matching filters in ${sourceDbName}.${collectionName} to archive.`);
+            status = `No documents matching filters in ${sourceDbName}.${collectionName} to archive.`;
             return status;
         }
         logger.info(`Found ${documentsToArchive.length} documents to archive from ${sourceDbName}.${collectionName}.`);
@@ -561,7 +554,7 @@ class DbAbstraction {
         if (documentsToArchive.length === result.insertedCount) {
             logger.info(`All documents successfully archived. Moving on to delete them from original dataset`);
             // Delete the original documents from the source collection.
-            const deleteResult = await sourceCollection.deleteMany(query);
+            const deleteResult = await sourceCollection.deleteMany(filters);
             logger.info(`Successfully deleted ${deleteResult.deletedCount} documents from ${sourceDbName}.${collectionName}.`);
             status = `Successfully archived ${deleteResult.deletedCount} documents to ${archiveDbName}.${collectionName}`;
             return status;

@@ -24,7 +24,7 @@ router.post('/archive', async (req, res, next) => {
     try {
         const token = req.cookies.jwt;
         let status = {};
-        if (!request.sourceDataSetName || !request.archiveDataSetName || !request.cutOffDate) {
+        if (!request.sourceDataSetName || !request.archiveDataSetName || !request.filters) {
             status.error = new Error("One or more required parameters is missing");
         } else {
             let sourceDsAccessAllowed = await AclCheck.aclCheck(request.sourceDataSetName, "default", req.params.dsUser, token);
@@ -39,8 +39,33 @@ router.post('/archive', async (req, res, next) => {
                 res.status(403).json(status);
                 return
             }
+            // Get the filters array from the request.
+            const filters = request.filters || [];
+            // Validate the filters array.
+            // It should be an array of objects with keys: field, type, value.
+            if (!Array.isArray(filters) || filters.length === 0) {
+                status.error = "Invalid filters format. If you want to archive whole dataset give some future date in the filters.";
+                res.status(403).json(status);
+                return
+            } else {
+                // Check if one of the entry in the filters array has type cutOffDate
+                const cutOffDateFilter = filters.find(f => f.field === "cutOffDate");
+                if (cutOffDateFilter) {
+                    // Parse the cutOffDate and convert to ISODate
+                    let parsedCutOffDate = Utils.parseAndValidateDate(cutOffDateFilter.value);
+                    if (parsedCutOffDate.error) {
+                        status.error = "Invalid cutOffDate format. Date should be in dd-mm-yyyy format";
+                        res.status(403).json(status);
+                        return;
+                    } else {
+                        cutOffDateFilter.value = parsedCutOffDate.date;
+                    }
+                }
+            }
+            // Call MongoFilters to get the filters
+            let [mongoFilters, _] = MongoFilters.getMongoFiltersAndSorters(filters, null, null);
             let dbAbstraction = new DbAbstraction();
-            status = await dbAbstraction.archiveData(request.sourceDataSetName, request.collectionName, request.archiveDataSetName, request.cutOffDate);
+            status = await dbAbstraction.archiveData(request.sourceDataSetName, request.collectionName, request.archiveDataSetName, mongoFilters);
         }
         if (status.error) {
             status.error = status.error.message;
@@ -48,13 +73,19 @@ router.post('/archive', async (req, res, next) => {
                 "sourceDataSetName": "<Dataset name whose documents to be archived>",
                 "collectionName": "The collection which needs to be archived. If not provided, defaults to `data`",
                 "archiveDataSetName": "<Dataset name where the archive docs should go>",
-                "cutOffDate": "Date in format dd-mm-yyyy"
+                "filters": "Array of filter objects"
             }
             status.exampleRequestBody = {
                 "sourceDataSetName": "abc",
                 "collectionName": "data",
                 "archiveDataSetName": "abc_archive",
-                "cutOffDate": "17-11-2024"
+                "filters": [
+                    {
+                        "field": "cutOffDate",
+                        "type": "lt",
+                        "value": "17-11-2024"
+                    }
+                ]
             }
             res.status(400).send(status);
             return;
