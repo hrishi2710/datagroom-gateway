@@ -213,18 +213,24 @@ async function drainRowstoDG(request)
 }
 
 
-exports.archiveDataset = async (sourceDataSetName, archiveDataSetName, cutOffDate, collectionName = "data") => {
+exports.archiveDataset = async (sourceDataSetName, archiveDataSetName, filters, collectionName = "data") => {
   /* exmaple Request Body = {
     "sourceDataSetName": "BMSCOPY",
     "collectionName": "data",
     "archiveDataSetName": "BMSCOPY_archive",
-    "cutOffDate": "10-08-2025"
+    "filters": [
+      {
+        "field": "cutOffDate",
+        "type": "lt",
+        "value": "10-08-2025"
+      }
+    ]
   } */
   let request = {
     sourceDataSetName,
     archiveDataSetName,
     collectionName,
-    cutOffDate
+    filters
   };
   let data = new TextEncoder().encode(
     JSON.stringify(request));
