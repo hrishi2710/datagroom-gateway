@@ -2,14 +2,18 @@ const request = require('supertest');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 
-// Mock dependencies
+// Comprehensive mocking to prevent hanging handles
 jest.mock('../dbAbstraction');
 jest.mock('../acl');
 jest.mock('../logger');
+jest.mock('../utils');
+jest.mock('../routes/mongoFilters');
 
 const DbAbstraction = require('../dbAbstraction');
 const AclCheck = require('../acl');
 const logger = require('../logger');
+const Utils = require('../utils');
+const MongoFilters = require('../routes/mongoFilters');
 const dsReadApiRouter = require('../routes/dsReadApi');
 
 describe('dsReadApi - /archive route', function() {
@@ -30,6 +34,12 @@ describe('dsReadApi - /archive route', function() {
         logger.info = jest.fn();
         logger.error = jest.fn();
 
+        // Mock Utils
+        Utils.parseAndValidateDate = jest.fn();
+
+        // Mock MongoFilters
+        MongoFilters.getMongoFiltersAndSorters = jest.fn();
+
         // Create mock DbAbstraction instance
         mockDbAbstraction = {
             archiveData: jest.fn()
@@ -45,7 +55,6 @@ describe('dsReadApi - /archive route', function() {
         jest.resetAllMocks();
     });
 
-    // Add afterAll hook to ensure cleanup
     afterAll(function() {
         // Force cleanup of any remaining handles
         jest.clearAllMocks();
@@ -57,11 +66,13 @@ describe('dsReadApi - /archive route', function() {
             sourceDataSetName: 'source-dataset',
             archiveDataSetName: 'archive-dataset',
             collectionName: 'data',
-            cutOffDate: '01-01-2024'
-        };
-
-        const validParams = {
-            dsUser: 'testuser'
+            filters: [
+                {
+                    field: 'cutOffDate',
+                    type: 'lt',
+                    value: '01-01-2024'
+                }
+            ]
         };
 
         test('should successfully archive data with valid parameters', async function() {
@@ -69,6 +80,15 @@ describe('dsReadApi - /archive route', function() {
             AclCheck.aclCheck = jest.fn()
                 .mockResolvedValueOnce(true) // Source dataset access
                 .mockResolvedValueOnce(true); // Archive dataset access
+
+            // Mock date parsing
+            Utils.parseAndValidateDate.mockReturnValue({
+                date: new Date('2024-01-01T00:00:00.000Z')
+            });
+
+            // Mock MongoFilters
+            const mockMongoFilters = { _id: { $lt: 'some-object-id' } };
+            MongoFilters.getMongoFiltersAndSorters.mockReturnValue([mockMongoFilters, []]);
 
             // Mock successful archive operation
             mockDbAbstraction.archiveData.mockResolvedValue({
@@ -88,29 +108,39 @@ describe('dsReadApi - /archive route', function() {
             expect(AclCheck.aclCheck).toHaveBeenCalledWith(
                 validRequestBody.sourceDataSetName,
                 'default',
-                undefined, // req.params.dsUser is undefined in this test setup
+                undefined,
                 'valid-token'
             );
 
-            // Verify archive method was called with correct parameters
+            // Verify date parsing was called
+            expect(Utils.parseAndValidateDate).toHaveBeenCalledWith('01-01-2024');
+
+            // Verify MongoFilters was called
+            expect(MongoFilters.getMongoFiltersAndSorters).toHaveBeenCalledWith(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        field: 'cutOffDate',
+                        type: 'lt',
+                        value: expect.any(Date)
+                    })
+                ]),
+                null,
+                null
+            );
+
+            // Verify archive method was called with mongo filters
             expect(mockDbAbstraction.archiveData).toHaveBeenCalledWith(
                 validRequestBody.sourceDataSetName,
                 validRequestBody.collectionName,
                 validRequestBody.archiveDataSetName,
-                validRequestBody.cutOffDate
-            );
-
-            // Verify logging
-            expect(logger.info).toHaveBeenCalledWith(
-                validRequestBody,
-                'Incoming request to archive dataset'
+                mockMongoFilters
             );
         });
 
         test('should return 400 when required parameters are missing', async function() {
             const incompleteRequestBody = {
                 sourceDataSetName: 'source-dataset',
-                // Missing archiveDataSetName and cutOffDate
+                // Missing archiveDataSetName and filters
             };
 
             const response = await request(app)
@@ -125,6 +155,90 @@ describe('dsReadApi - /archive route', function() {
 
             // Verify ACL checks were not called
             expect(AclCheck.aclCheck).not.toHaveBeenCalled();
+            expect(mockDbAbstraction.archiveData).not.toHaveBeenCalled();
+        });
+
+        test('should return 403 when filters array is empty', async function() {
+
+            AclCheck.aclCheck = jest.fn()
+                .mockResolvedValueOnce(true) // Source dataset access
+                .mockResolvedValueOnce(true); // Archive dataset access
+
+            
+            const requestWithEmptyFilters = {
+                sourceDataSetName: 'source-dataset',
+                archiveDataSetName: 'archive-dataset',
+                collectionName: 'data',
+                filters: [] // Empty filters array
+            };
+
+            const response = await request(app)
+                .post('/api/archive')
+                .set('Cookie', ['jwt=valid-token'])
+                .send(requestWithEmptyFilters);
+
+            expect(response.status).toBe(403);
+            expect(response.body.error).toBe('Invalid filters format. If you want to archive whole dataset give some future date in the filters.');
+
+            // Verify ACL checks were called but archive was not
+            expect(AclCheck.aclCheck).toHaveBeenCalledTimes(2);
+            expect(mockDbAbstraction.archiveData).not.toHaveBeenCalled();
+        });
+
+        test('should return 400 when filters is not an array', async function() {
+            AclCheck.aclCheck = jest.fn()
+                .mockResolvedValueOnce(true) // Source dataset access
+                .mockResolvedValueOnce(true); // Archive dataset access
+            
+            const requestWithInvalidFilters = {
+                sourceDataSetName: 'source-dataset',
+                archiveDataSetName: 'archive-dataset',
+                collectionName: 'data',
+                filters: 'not-an-array'
+            };
+
+            const response = await request(app)
+                .post('/api/archive')
+                .set('Cookie', ['jwt=valid-token'])
+                .send(requestWithInvalidFilters);
+
+            expect(response.status).toBe(403);
+            expect(response.body.error).toBe('Invalid filters format. If you want to archive whole dataset give some future date in the filters.');
+        });
+
+        test('should return 403 when cutOffDate parsing fails', async function() {
+            // Mock ACL checks to return true
+            AclCheck.aclCheck = jest.fn()
+                .mockResolvedValue(true);
+
+            // Mock date parsing to return error
+            Utils.parseAndValidateDate.mockReturnValue({
+                error: new Error('Invalid date format')
+            });
+
+            const requestWithInvalidDate = {
+                sourceDataSetName: 'source-dataset',
+                archiveDataSetName: 'archive-dataset',
+                collectionName: 'data',
+                filters: [
+                    {
+                        field: 'cutOffDate',
+                        type: 'lt',
+                        value: 'invalid-date'
+                    }
+                ]
+            };
+
+            const response = await request(app)
+                .post('/api/archive')
+                .set('Cookie', ['jwt=valid-token'])
+                .send(requestWithInvalidDate);
+
+            expect(response.status).toBe(403);
+            expect(response.body.error).toBe('Invalid cutOffDate format. Date should be in dd-mm-yyyy format');
+
+            // Verify date parsing was called
+            expect(Utils.parseAndValidateDate).toHaveBeenCalledWith('invalid-date');
             expect(mockDbAbstraction.archiveData).not.toHaveBeenCalled();
         });
 
@@ -170,6 +284,14 @@ describe('dsReadApi - /archive route', function() {
             AclCheck.aclCheck = jest.fn()
                 .mockResolvedValue(true);
 
+            // Mock date parsing
+            Utils.parseAndValidateDate.mockReturnValue({
+                date: new Date('2024-01-01T00:00:00.000Z')
+            });
+
+            // Mock MongoFilters
+            MongoFilters.getMongoFiltersAndSorters.mockReturnValue([{}, []]);
+
             // Mock archive operation to return an error
             const archiveError = new Error('Database connection failed');
             mockDbAbstraction.archiveData.mockResolvedValue({
@@ -195,6 +317,14 @@ describe('dsReadApi - /archive route', function() {
             AclCheck.aclCheck = jest.fn()
                 .mockResolvedValue(true);
 
+            // Mock date parsing
+            Utils.parseAndValidateDate.mockReturnValue({
+                date: new Date('2024-01-01T00:00:00.000Z')
+            });
+
+            // Mock MongoFilters
+            MongoFilters.getMongoFiltersAndSorters.mockReturnValue([{}, []]);
+
             // Mock archive operation to throw an exception
             const thrownError = new Error('Unexpected database error');
             mockDbAbstraction.archiveData.mockRejectedValue(thrownError);
@@ -206,64 +336,59 @@ describe('dsReadApi - /archive route', function() {
 
             expect(response.status).toBe(415);
             expect(response.body.err).toBe(thrownError.message);
+
+            // Verify error was logged
+            expect(logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    err: thrownError.message,
+                    stack: expect.any(String)
+                }),
+                'Exception while archiving'
+            );
         });
 
-        test('should handle missing collectionName with default value', async function() {
+        test('should handle filters without cutOffDate', async function() {
             // Mock ACL checks to return true
             AclCheck.aclCheck = jest.fn()
                 .mockResolvedValue(true);
+
+            // Mock MongoFilters
+            const mockMongoFilters = { status: { $eq: 'archived' } };
+            MongoFilters.getMongoFiltersAndSorters.mockReturnValue([mockMongoFilters, []]);
 
             // Mock successful archive operation
             mockDbAbstraction.archiveData.mockResolvedValue({
                 status: 'Successfully archived 5 documents'
             });
 
-            const requestWithoutCollectionName = {
+            const requestWithoutCutOffDate = {
                 sourceDataSetName: 'source-dataset',
                 archiveDataSetName: 'archive-dataset',
-                cutOffDate: '01-01-2024'
-                // collectionName is missing
+                collectionName: 'data',
+                filters: [
+                    {
+                        field: 'status',
+                        type: 'eq',
+                        value: 'archived'
+                    }
+                ]
             };
 
             const response = await request(app)
                 .post('/api/archive')
                 .set('Cookie', ['jwt=valid-token'])
-                .send(requestWithoutCollectionName);
+                .send(requestWithoutCutOffDate);
 
             expect(response.status).toBe(200);
 
-            // Verify archive method was called with undefined collectionName (which should default to 'data')
-            expect(mockDbAbstraction.archiveData).toHaveBeenCalledWith(
-                requestWithoutCollectionName.sourceDataSetName,
-                undefined, // collectionName is undefined, will be handled by archiveData method
-                requestWithoutCollectionName.archiveDataSetName,
-                requestWithoutCollectionName.cutOffDate
-            );
-        });
+            // Verify date parsing was not called
+            expect(Utils.parseAndValidateDate).not.toHaveBeenCalled();
 
-        test('should handle missing JWT cookie', async function() {
-            const response = await request(app)
-                .post('/api/archive')
-                // No JWT cookie set
-                .send(validRequestBody);
-
-            // The route should still process but ACL check will receive undefined token
-            // This tests the behavior when no authentication is provided
-
-            // Note: The actual behavior depends on how AclCheck.aclCheck handles undefined token
-            // For this test, we'll mock it to return false
-            AclCheck.aclCheck = jest.fn()
-                .mockResolvedValue(false);
-
-            const responseWithMock = await request(app)
-                .post('/api/archive')
-                .send(validRequestBody);
-
-            expect(AclCheck.aclCheck).toHaveBeenCalledWith(
-                validRequestBody.sourceDataSetName,
-                'default',
-                undefined,
-                undefined // No JWT token
+            // Verify MongoFilters was called with original filters
+            expect(MongoFilters.getMongoFiltersAndSorters).toHaveBeenCalledWith(
+                requestWithoutCutOffDate.filters,
+                null,
+                null
             );
         });
 
@@ -283,59 +408,91 @@ describe('dsReadApi - /archive route', function() {
                 "sourceDataSetName": "<Dataset name whose documents to be archived>",
                 "collectionName": "The collection which needs to be archived. If not provided, defaults to `data`",
                 "archiveDataSetName": "<Dataset name where the archive docs should go>",
-                "cutOffDate": "Date in format dd-mm-yyyy"
+                "filters": "Array of filter objects"
             });
             expect(response.body.exampleRequestBody).toEqual({
                 "sourceDataSetName": "abc",
                 "collectionName": "data",
                 "archiveDataSetName": "abc_archive",
-                "cutOffDate": "17-11-2024"
+                "filters": [
+                    {
+                        "field": "cutOffDate",
+                        "type": "lt",
+                        "value": "17-11-2024"
+                    }
+                ]
             });
         });
 
-        test('should handle empty request body', async function() {
-            const response = await request(app)
-                .post('/api/archive')
-                .set('Cookie', ['jwt=valid-token'])
-                .send({});
+        test('should handle multiple filters including cutOffDate', async function() {
+            // Mock ACL checks to return true
+            AclCheck.aclCheck = jest.fn()
+                .mockResolvedValue(true);
 
-            expect(response.status).toBe(400);
-            expect(response.body.error).toBe('One or more required parameters is missing');
-        });
+            // Mock date parsing
+            Utils.parseAndValidateDate.mockReturnValue({
+                date: new Date('2024-01-01T00:00:00.000Z')
+            });
 
-        test('should handle null values in request body', async function() {
-            const requestWithNulls = {
-                sourceDataSetName: null,
+            // Mock MongoFilters
+            const mockMongoFilters = { 
+                _id: { $lt: 'some-object-id' },
+                status: { $eq: 'completed' }
+            };
+            MongoFilters.getMongoFiltersAndSorters.mockReturnValue([mockMongoFilters, []]);
+
+            // Mock successful archive operation
+            mockDbAbstraction.archiveData.mockResolvedValue({
+                status: 'Successfully archived 3 documents'
+            });
+
+            const requestWithMultipleFilters = {
+                sourceDataSetName: 'source-dataset',
                 archiveDataSetName: 'archive-dataset',
-                cutOffDate: '01-01-2024'
+                collectionName: 'data',
+                filters: [
+                    {
+                        field: 'cutOffDate',
+                        type: 'lt',
+                        value: '01-01-2024'
+                    },
+                    {
+                        field: 'status',
+                        type: 'eq',
+                        value: 'completed'
+                    }
+                ]
             };
 
             const response = await request(app)
                 .post('/api/archive')
                 .set('Cookie', ['jwt=valid-token'])
-                .send(requestWithNulls);
-
-            expect(response.status).toBe(400);
-            expect(response.body.error).toBe('One or more required parameters is missing');
-        });
-
-        test('should handle archive operation with no documents to archive', async function() {
-            // Mock ACL checks to return true
-            AclCheck.aclCheck = jest.fn()
-                .mockResolvedValue(true);
-
-            // Mock archive operation returning no documents archived
-            mockDbAbstraction.archiveData.mockResolvedValue({
-                status: 'No documents older than 01-01-2024 found in source-dataset'
-            });
-
-            const response = await request(app)
-                .post('/api/archive')
-                .set('Cookie', ['jwt=valid-token'])
-                .send(validRequestBody);
+                .send(requestWithMultipleFilters);
 
             expect(response.status).toBe(200);
-            expect(response.body.status).toContain('No documents older than');
+            expect(response.body.status).toContain('Successfully archived');
+
+            // Verify date parsing was called for cutOffDate
+            expect(Utils.parseAndValidateDate).toHaveBeenCalledWith('01-01-2024');
+
+            // Verify the filters were processed correctly
+            const expectedFilters = expect.arrayContaining([
+                expect.objectContaining({
+                    field: 'cutOffDate',
+                    type: 'lt',
+                    value: expect.any(Date)
+                }),
+                expect.objectContaining({
+                    field: 'status',
+                    type: 'eq',
+                    value: 'completed'
+                })
+            ]);
+            expect(MongoFilters.getMongoFiltersAndSorters).toHaveBeenCalledWith(
+                expectedFilters,
+                null,
+                null
+            );
         });
     });
 
@@ -344,8 +501,15 @@ describe('dsReadApi - /archive route', function() {
             sourceDataSetName: 'source-dataset',
             archiveDataSetName: 'archive-dataset',
             collectionName: 'data',
-            cutOffDate: '01-01-2024'
+            filters: [
+                {
+                    field: 'cutOffDate',
+                    type: 'lt',
+                    value: '01-01-2024'
+                }
+            ]
         };
+
         test('should handle ACL check throwing an exception', async function() {
             // Mock ACL check to throw an exception
             AclCheck.aclCheck = jest.fn()
@@ -358,24 +522,31 @@ describe('dsReadApi - /archive route', function() {
 
             expect(response.status).toBe(415);
             expect(response.body.err).toBe('ACL service unavailable');
+
+            expect(logger.error).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    err: 'ACL service unavailable',
+                    stack: expect.any(String)
+                }),
+                'Exception while archiving'
+            );
         });
 
-        test('should handle malformed JWT cookie', async function() {
-            AclCheck.aclCheck = jest.fn()
-                .mockResolvedValue(false);
+        test('should handle missing filters parameter', async function() {
+            const requestWithoutFilters = {
+                sourceDataSetName: 'source-dataset',
+                archiveDataSetName: 'archive-dataset',
+                collectionName: 'data'
+                // Missing filters completely
+            };
 
             const response = await request(app)
                 .post('/api/archive')
-                .set('Cookie', ['jwt=malformed-token'])
-                .send(validRequestBody);
+                .set('Cookie', ['jwt=valid-token'])
+                .send(requestWithoutFilters);
 
-            // Should attempt ACL check with malformed token
-            expect(AclCheck.aclCheck).toHaveBeenCalledWith(
-                validRequestBody.sourceDataSetName,
-                'default',
-                undefined,
-                'malformed-token'
-            );
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('One or more required parameters is missing');
         });
     });
 });

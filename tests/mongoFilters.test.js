@@ -370,6 +370,130 @@ describe('MongoFilters', function() {
                 expect(filters.status).toEqual({ $eq: 'active' });
                 expect(filters.count).toEqual({ $eq: 5 });
             });
+
+            // NEW TESTS FOR CUTOFFDATE
+            test('should handle cutOffDate field with greater than filter', function() {
+                const testDate = new Date('2024-01-15T10:30:00.000Z');
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'gt', value: testDate }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$gt).toBeDefined();
+                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                
+                // Verify the ObjectId was created from the correct timestamp
+                const expectedTimestamp = Math.floor(testDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$gt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
+            });
+
+            test('should handle cutOffDate field with less than filter', function() {
+                const testDate = new Date('2024-06-20T15:45:30.000Z');
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'lt', value: testDate }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$lt).toBeDefined();
+                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                
+                // Verify the ObjectId was created from the correct timestamp
+                const expectedTimestamp = Math.floor(testDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
+            });
+
+            test('should handle multiple cutOffDate filters', function() {
+                const startDate = new Date('2024-01-01T00:00:00.000Z');
+                const endDate = new Date('2024-12-31T23:59:59.000Z');
+                
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'gt', value: startDate },
+                    { field: 'cutOffDate', type: 'lt', value: endDate }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                // Note: The second filter will override the first since they both target _id
+                // This is the current behavior based on your implementation
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$lt).toBeDefined();
+                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                
+                // Should contain the last processed cutOffDate (endDate)
+                const expectedTimestamp = Math.floor(endDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
+            });
+
+            test('should handle cutOffDate with other filters', function() {
+                const cutOffDate = new Date('2024-03-15T12:00:00.000Z');
+                const qFilters = [
+                    { field: 'name', type: 'like', value: 'test' },
+                    { field: 'cutOffDate', type: 'gt', value: cutOffDate },
+                    { field: 'status', type: 'eq', value: 'active' }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                expect(filters.name).toEqual({ $regex: 'test', $options: 'i' });
+                expect(filters.status).toEqual({ $eq: 'active' });
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$gt).toBeDefined();
+                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+            });
+
+            test('should handle cutOffDate with invalid type gracefully', function() {
+                const testDate = new Date('2024-01-15T10:30:00.000Z');
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'eq', value: testDate } // Invalid type for cutOffDate
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                // Should not create any _id filter since type is not 'gt' or 'lt'
+                expect(filters._id).toBeUndefined();
+            });
+
+            test('should handle cutOffDate with Date object edge cases', function() {
+                // Test with epoch date
+                const epochDate = new Date(0);
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'gt', value: epochDate }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$gt).toBeDefined();
+                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                
+                // Epoch timestamp should be 0
+                const actualTimestamp = filters._id.$gt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(0);
+            });
+
+            test('should handle cutOffDate with very recent date', function() {
+                const recentDate = new Date(); // Current time
+                const qFilters = [
+                    { field: 'cutOffDate', type: 'lt', value: recentDate }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$lt).toBeDefined();
+                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                
+                const expectedTimestamp = Math.floor(recentDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
+            });
         });
 
         describe('Sorter processing', function() {
@@ -447,6 +571,27 @@ describe('MongoFilters', function() {
                 // Restore original console.error
                 console.error = originalError;
             });
+
+            test('should handle cutOffDate processing errors gracefully', function() {
+                // Mock console.error to avoid actual logging during tests
+                const originalError = console.error;
+                console.error = jest.fn();
+
+                try {
+                    // Force an error by passing null date
+                    const qFilters = [
+                        { field: 'cutOffDate', type: 'gt', value: null }
+                    ];
+                    
+                    const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                    
+                    // Should fall back to error filter
+                    expect(filters._id).toEqual({ $eq: "" });
+                } finally {
+                    // Restore original console.error
+                    console.error = originalError;
+                }
+            });
         });
 
         describe('Integration scenarios', function() {
@@ -491,6 +636,60 @@ describe('MongoFilters', function() {
                 expect(filters.$or).toBeDefined();
                 expect(filters.$and.length).toBeGreaterThan(0);
                 expect(filters.$or.length).toBeGreaterThan(0);
+            });
+
+            test('should handle complex scenario with cutOffDate and other filters', function() {
+                const archiveDate = new Date('2024-01-01T00:00:00.000Z');
+                const qFilters = [
+                    { field: 'title', type: 'like', value: 'archived || old' },
+                    { field: 'status', type: 'eq', value: 'completed' },
+                    { field: 'cutOffDate', type: 'lt', value: archiveDate },
+                    { field: 'priority', type: '=', value: '2' }
+                ];
+                
+                const qSorters = [
+                    { field: '_id', dir: 'asc' }
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, qSorters, null);
+                
+                // Check that all filters are applied
+                expect(filters.$or).toBeDefined();
+                expect(filters.$or).toHaveLength(2);
+                expect(filters.status).toEqual({ $eq: 'completed' });
+                expect(filters.priority).toEqual({ $eq: 2 });
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$lt).toBeDefined();
+                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                
+                // Check sorters
+                expect(sorters).toEqual([['_id', 'asc']]);
+                
+                // Verify cutOffDate ObjectId timestamp
+                const expectedTimestamp = Math.floor(archiveDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
+            });
+
+            test('should handle cutOffDate overriding _id filter', function() {
+                const testDate = new Date('2024-05-15T08:30:00.000Z');
+                const qFilters = [
+                    { field: '_id', type: 'gt', value: '507f1f77bcf86cd799439011' },
+                    { field: 'cutOffDate', type: 'lt', value: testDate } // This should override the _id filter
+                ];
+                
+                const [filters, sorters] = getMongoFiltersAndSorters(qFilters, [], null);
+                
+                // cutOffDate should override the direct _id filter
+                expect(filters._id).toBeDefined();
+                expect(filters._id.$lt).toBeDefined();
+                expect(filters._id.$gt).toBeUndefined(); // Should be overridden
+                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                
+                // Verify it's using the cutOffDate ObjectId, not the original _id
+                const expectedTimestamp = Math.floor(testDate.getTime() / 1000);
+                const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
+                expect(actualTimestamp).toBe(expectedTimestamp);
             });
         });
     });
