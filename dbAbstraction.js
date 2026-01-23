@@ -64,7 +64,7 @@ class DbAbstraction {
 
     async connect () {
         if (this.isConnected && this.client && this.client.topology 
-            && this.client.topology.isConnected()) {
+            && this.client.topology.isConnected?.()) {
             logger.debug('Already a client connection to DB. Reusing this');
             return;
         }
@@ -80,8 +80,6 @@ class DbAbstraction {
             this.client = new MongoClient(this.url, {
                 maxPoolSize: 60, //Maintain upto 60 sockets
                 minPoolSize: 3, // Keep at least 3 connections open
-                useNewUrlParser: true, 
-                useUnifiedTopology: true, 
                 serverSelectionTimeoutMS: 5000, // Timeout after 5 seconds if server not found
                 socketTimeoutMS: 45000 //Close sockets after 45s of inactivity
             });
@@ -166,7 +164,7 @@ class DbAbstraction {
             let db = this.client.db(dbName);
             let collection = db.collection(tableName);
             let ret = await collection.insertOne(doc);
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, insertedId: ret.insertedId };
         } catch (err) {
             logger.error(err, `insertOne error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -180,10 +178,10 @@ class DbAbstraction {
             let collection = db.collection(tableName);
             if (selector["_id"]) {
                 logger.warn('insertOneUniquely error: Must not have _id');
-                return { result: { ok: 0 }, message: 'setObj must not have _id' }
+                return { ok: 0, message: 'setObj must not have _id' }
             }
             let ret = await collection.updateOne(selector, { $setOnInsert: setObj }, { upsert: true });
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, matchedCount: ret.matchedCount, modifiedCount: ret.modifiedCount, upsertedId: ret.upsertedId };
         } catch (err) {
             logger.error(err, `insertOneUniquely error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -211,7 +209,7 @@ class DbAbstraction {
                 selector["_id"] = new ObjectId(selector["_id"]);
             }
             let ret = await collection.updateOne(selector, { $set: updateObj }, {});
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, nModified: ret.modifiedCount, matchedCount: ret.matchedCount, modifiedCount: ret.modifiedCount };
         } catch (err) {
             logger.error(err, `updateOne error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -228,7 +226,7 @@ class DbAbstraction {
                 selector["_id"] = new ObjectId(selector["_id"]);
             }
             let ret = await collection.updateOne(selector, { $unset: unsetObj }, {});
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, nModified: ret.modifiedCount, matchedCount: ret.matchedCount, modifiedCount: ret.modifiedCount };
         } catch (err) {
             logger.error(err, `unsetOne error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -259,9 +257,10 @@ class DbAbstraction {
                         selector["_id"] = new ObjectId(selector["_id"]);
                     } 
                     ret = await collection.updateOne(selector, { $set: updateObj }, {});
+                    ret.result = { ok: ret.acknowledged ? 1 : 0, nModified: ret.modifiedCount };
                 }
             }, {})
-            logger.info(`UpdateOneKeyInTransaction result: ${ret.result}`);
+            logger.info(`UpdateOneKeyInTransaction result: ${JSON.stringify(ret.result)}`);
             return ret.result;
         } catch (err) {
             logger.error(err, `updateOneKeyInTransaction error for ${dbName}.${tableName}`);
@@ -281,7 +280,7 @@ class DbAbstraction {
                 selector["_id"] = new ObjectId(selector["_id"]);
             }
             let ret = await collection.deleteOne(selector);
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, deletedCount: ret.deletedCount };
         } catch (err) {
             logger.error(err, `removeOne error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -476,8 +475,8 @@ class DbAbstraction {
                 doc = fn(doc);
             }
             let ret = await toCollection.insertOne(doc);
-            if (ret.result.ok !== 1) {
-                logger.warn(`InsertOne failed: ${ret.result}`);
+            if (!ret.acknowledged) {
+                logger.warn(`InsertOne failed: ${JSON.stringify(ret)}`);
             }
         }
     }
