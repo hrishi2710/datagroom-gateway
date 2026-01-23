@@ -11,9 +11,8 @@ RUN apt-get update && \
     apt-get install -y procps
 
 # Install prerequisites and MongoDB
-RUN curl -fsSL https://deb.nodesource.com/setup_12.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g npm@7.5.2
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs
 
 # Set the default data directory as a volume
 VOLUME /var/lib/mongodb
