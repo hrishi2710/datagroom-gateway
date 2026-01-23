@@ -5,4 +5,5 @@ attachments
 .env
 coverage
 datagroom.log
-
+aidlc-docs/
+node_modules/
