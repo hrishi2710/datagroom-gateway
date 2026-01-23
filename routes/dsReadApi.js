@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 const router = require('express').Router();
 const DbAbstraction = require('../dbAbstraction');
 const ExcelUtils = require('../excelUtils');
@@ -620,7 +620,7 @@ router.post('/downloadXlsx/:dsName/:dsView/:dsUser', async (req, res, next) => {
     try {
         let bits = fs.readFileSync(fileName);
         // convert binary data to base64 encoded string
-        let base64Str = new Buffer(bits).toString('base64');
+        let base64Str = Buffer.from(bits).toString('base64');
         res.json({output: base64Str});
         fs.unlinkSync(fileName);
     } catch (e) {

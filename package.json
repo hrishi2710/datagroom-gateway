@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=12.0.0"
+  },
   "scripts": {
     "test": "jest",
     "test:watch": "jest --watch",
@@ -11,7 +14,8 @@
     "test:mongofilters": "jest tests/mongoFilters.test.js",
     "test:api": "jest tests/dsReadApi.test.js",
     "test:verbose": "jest --verbose",
-    "start": "node server.js"
+    "start": "node server.js disableAD=true",
+    "start:dev": "set NODE_ENV=development&& node server.js disableAD=true"
   },
   "author": "",
   "license": "ISC",
