@@ -193,7 +193,21 @@ class DbAbstraction {
             if (! this.isConnected ) await this.connect();
             let db = this.client.db(dbName);
             let collection = db.collection(tableName);
-            return await collection.updateMany(selector, { $set: updateObj }, { upsert: true });
+            let ret = await collection.updateMany(selector, { $set: updateObj }, { upsert: true });
+            // Return MongoDB v3-style result for backward compatibility
+            return {
+                result: {
+                    ok: ret.acknowledged ? 1 : 0,
+                    n: ret.matchedCount,
+                    nModified: ret.modifiedCount,
+                    upserted: ret.upsertedId ? [{ _id: ret.upsertedId }] : undefined
+                },
+                acknowledged: ret.acknowledged,
+                matchedCount: ret.matchedCount,
+                modifiedCount: ret.modifiedCount,
+                upsertedId: ret.upsertedId,
+                upsertedCount: ret.upsertedCount
+            };
         } catch (err) {
             logger.error(err, `update error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -294,7 +308,7 @@ class DbAbstraction {
             let db = this.client.db(dbName);
             let collection = db.collection(tableName);
             let ret = await collection.deleteOne(selector);
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, deletedCount: ret.deletedCount };
         } catch (err) {
             logger.error(err, `removeOneWithValidId error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -311,7 +325,7 @@ class DbAbstraction {
                 selector["_id"] = new ObjectId(selector["_id"]);
             }
             let ret = await collection.deleteMany(selector);
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, deletedCount: ret.deletedCount };
         } catch (err) {
             logger.error(err, `removeMany error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
@@ -327,7 +341,7 @@ class DbAbstraction {
             let unsetObj = {};
             unsetObj[field] = 1;
             let ret = await collection.updateMany({}, {$unset: unsetObj}, {});
-            return ret.result;
+            return { ok: ret.acknowledged ? 1 : 0, nModified: ret.modifiedCount, matchedCount: ret.matchedCount, modifiedCount: ret.modifiedCount };
         } catch (err) {
             logger.error(err, `removeFieldFromAll error for ${dbName}.${tableName}`);
             this.handleDbErrors(err);
