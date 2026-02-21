@@ -290,7 +290,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$gt).toBeDefined();
-                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$gt.constructor.name).toBe('ObjectId');
             });
 
             test('should handle _id field with less than filter', function() {
@@ -301,7 +301,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
             });
 
             test('should handle like filter', function() {
@@ -382,7 +382,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$gt).toBeDefined();
-                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$gt.constructor.name).toBe('ObjectId');
                 
                 // Verify the ObjectId was created from the correct timestamp
                 const expectedTimestamp = Math.floor(testDate.getTime() / 1000);
@@ -400,7 +400,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
                 
                 // Verify the ObjectId was created from the correct timestamp
                 const expectedTimestamp = Math.floor(testDate.getTime() / 1000);
@@ -423,7 +423,7 @@ describe('MongoFilters', function() {
                 // This is the current behavior based on your implementation
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
                 
                 // Should contain the last processed cutOffDate (endDate)
                 const expectedTimestamp = Math.floor(endDate.getTime() / 1000);
@@ -445,7 +445,7 @@ describe('MongoFilters', function() {
                 expect(filters.status).toEqual({ $eq: 'active' });
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$gt).toBeDefined();
-                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$gt.constructor.name).toBe('ObjectId');
             });
 
             test('should handle cutOffDate with invalid type gracefully', function() {
@@ -471,7 +471,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$gt).toBeDefined();
-                expect(filters._id.$gt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$gt.constructor.name).toBe('ObjectId');
                 
                 // Epoch timestamp should be 0
                 const actualTimestamp = filters._id.$gt.getTimestamp().getTime() / 1000;
@@ -488,7 +488,7 @@ describe('MongoFilters', function() {
                 
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
                 
                 const expectedTimestamp = Math.floor(recentDate.getTime() / 1000);
                 const actualTimestamp = filters._id.$lt.getTimestamp().getTime() / 1000;
@@ -660,7 +660,7 @@ describe('MongoFilters', function() {
                 expect(filters.priority).toEqual({ $eq: 2 });
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
                 
                 // Check sorters
                 expect(sorters).toEqual([['_id', 'asc']]);
@@ -684,7 +684,7 @@ describe('MongoFilters', function() {
                 expect(filters._id).toBeDefined();
                 expect(filters._id.$lt).toBeDefined();
                 expect(filters._id.$gt).toBeUndefined(); // Should be overridden
-                expect(filters._id.$lt.constructor.name).toBe('ObjectID');
+                expect(filters._id.$lt.constructor.name).toBe('ObjectId');
                 
                 // Verify it's using the cutOffDate ObjectId, not the original _id
                 const expectedTimestamp = Math.floor(testDate.getTime() / 1000);

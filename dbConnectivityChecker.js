@@ -31,8 +31,6 @@ class DbConnectivityChecker {
             this.client = new MongoClient(this.url, {
                 maxPoolSize: 1,
                 minPoolSize: 1, // Maintain only one connection
-                useNewUrlParser: true, 
-                useUnifiedTopology: true, 
                 serverSelectionTimeoutMS: 4000, 
                 heartbeatFrequencyMS: heartBeatInterval
             });
